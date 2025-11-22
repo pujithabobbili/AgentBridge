@@ -29,6 +29,11 @@ PROVIDERS = [
     {"id": "A", "name": "OCR+Regex A", "url": "http://localhost:7001"},
     {"id": "B", "name": "OCR+LLM B", "url": "http://localhost:7002"},
     {"id": "C", "name": "Template C", "url": "http://localhost:7003"},
+    {"id": "D", "name": "Fast LLM D", "url": "http://localhost:7004"},
+    {"id": "E", "name": "High Accuracy LLM E", "url": "http://localhost:7005"},
+    {"id": "F", "name": "Local Model F", "url": "http://localhost:7006"},
+    {"id": "G", "name": "Hybrid G", "url": "http://localhost:7007"},
+    {"id": "H", "name": "Specialized Parser H", "url": "http://localhost:7008"},
 ]
 
 TIMEOUT_SECONDS = 2.5
