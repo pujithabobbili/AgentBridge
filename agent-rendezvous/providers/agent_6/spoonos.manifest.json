@@ -1,0 +1,14 @@
+{
+  "name": "timezone-resolver",
+  "permissions": {
+    "net_allow": [
+      "nominatim.openstreetmap.org:443",
+      "api.timezonedb.com:443"
+    ],
+    "fs_read": [],
+    "fs_write": []
+  },
+  "secrets": ["TIMEZONEDB_API_KEY"],
+  "resources": { "cpu": 1, "ram_mb": 256, "timeout_ms": 10000 },
+  "routes": { "proposal": "/proposal", "execute": "/execute" }
+}

@@ -1,11 +1,12 @@
 from mcp.server.fastmcp import FastMCP
+import dateparser
 
 mcp = FastMCP("poster-ocr-dateparser")
 
 @mcp.tool()
 def parse_date(text: str) -> str:
-    """Parse dates from text using advanced logic."""
-    return f"Parsed date from: {text[:20]}..."
+    d = dateparser.parse(text, settings={"PREFER_DATES_FROM": "future"})
+    return d.isoformat() if d else ""
 
 if __name__ == "__main__":
     mcp.run()

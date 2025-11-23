@@ -10,16 +10,6 @@
       "args": ["providers/agent_2/mcp_server.py"],
       "env": {}
     },
-    "poster-ocr-fast": {
-      "command": "python",
-      "args": ["providers/agent_3/mcp_server.py"],
-      "env": {}
-    },
-    "poster-template-heuristic": {
-      "command": "node",
-      "args": ["providers/agent_4/mcp_server.mjs"],
-      "env": {}
-    },
     "event-normalizer": {
       "command": "python",
       "args": ["providers/agent_5/mcp_server.py"],
@@ -28,11 +18,6 @@
     "timezone-resolver": {
       "command": "python",
       "args": ["providers/agent_6/mcp_server.py"],
-      "env": {}
-    },
-    "location-enricher": {
-      "command": "node",
-      "args": ["providers/agent_7/mcp_server.mjs"],
       "env": {}
     },
     "ics-builder": {

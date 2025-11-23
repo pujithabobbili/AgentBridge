@@ -54,8 +54,8 @@ async def startup_event():
         })
     manifest_map = {
         "poster-ocr-regex": str(Path(__file__).parent.parent / "providers" / "agent_1" / "spoonos.manifest.json"),
-        "poster-ocr-fast": str(Path(__file__).parent.parent / "providers" / "agent_3" / "spoonos.manifest.json"),
         "ics-builder": str(Path(__file__).parent.parent / "providers" / "agent_8" / "spoonos.manifest.json"),
+        "timezone-resolver": str(Path(__file__).parent.parent / "providers" / "agent_6" / "spoonos.manifest.json"),
     }
     for p in PROVIDERS:
         mp = manifest_map.get(p["id"])
@@ -185,13 +185,10 @@ async def fetch_proposal(provider: Dict[str, str], intent: Intent) -> Dict[str, 
                     await session.initialize()
                     tools = await session.list_tools()
                     agent_defaults = {
-                        "poster-ocr-fast": {"est_cost_usd": 0.005, "est_latency_ms": 200, "confidence": 0.65},
                         "poster-ocr-regex": {"est_cost_usd": 0.01, "est_latency_ms": 500, "confidence": 0.75},
                         "poster-ocr-dateparser": {"est_cost_usd": 0.02, "est_latency_ms": 800, "confidence": 0.85},
-                        "poster-template-heuristic": {"est_cost_usd": 0.005, "est_latency_ms": 150, "confidence": 0.6},
                         "event-normalizer": {"est_cost_usd": 0.005, "est_latency_ms": 100, "confidence": 0.9},
                         "timezone-resolver": {"est_cost_usd": 0.005, "est_latency_ms": 120, "confidence": 0.8},
-                        "location-enricher": {"est_cost_usd": 0.01, "est_latency_ms": 300, "confidence": 0.75},
                         "ics-builder": {"est_cost_usd": 0.01, "est_latency_ms": 200, "confidence": 0.9},
                         "ocr-generic": {"est_cost_usd": 0.008, "est_latency_ms": 500, "confidence": 0.7},
                         "event-validator": {"est_cost_usd": 0.004, "est_latency_ms": 80, "confidence": 0.95},
@@ -355,11 +352,8 @@ async def execute(intent: Intent):
                         tool_map = {
                             "poster-ocr-regex": {"name": "extract_event_regex", "arg_key": "text"},
                             "poster-ocr-dateparser": {"name": "parse_date", "arg_key": "text"},
-                            "poster-ocr-fast": {"name": "fast_scan", "arg_key": "text"},
-                            "poster-template-heuristic": {"name": "apply_heuristic", "arg_key": "text"},
                             "event-normalizer": {"name": "normalize_event", "arg_key": "data"},
                             "timezone-resolver": {"name": "resolve_timezone", "arg_key": "location"},
-                            "location-enricher": {"name": "enrich_location", "arg_key": "location"},
                             "ics-builder": {"name": "build_ics", "arg_key": "event_data"},
                             "ocr-generic": {"name": "ocr_image", "arg_key": "image_path"},
                             "event-validator": {"name": "validate_event", "arg_key": "event_json"},
