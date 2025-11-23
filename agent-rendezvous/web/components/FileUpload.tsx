@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+'use client';
+
+import { useRef, useState, type ChangeEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Upload, File, X } from 'lucide-react';
+import { Upload01Icon, File01Icon, Cancel01Icon } from 'hugeicons-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface FileUploadProps {
@@ -16,7 +17,7 @@ export function FileUpload({ onFileSelect, accept, maxSize = 10 }: FileUploadPro
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
@@ -49,7 +50,6 @@ export function FileUpload({ onFileSelect, accept, maxSize = 10 }: FileUploadPro
 
   return (
     <div className="space-y-2">
-      <Label>File Upload</Label>
       <div className="flex items-center gap-4">
         <Input
           ref={fileInputRef}
@@ -65,7 +65,7 @@ export function FileUpload({ onFileSelect, accept, maxSize = 10 }: FileUploadPro
           onClick={() => fileInputRef.current?.click()}
           className="flex items-center gap-2"
         >
-          <Upload className="h-4 w-4" />
+          <Upload01Icon className="h-4 w-4" />
           Choose File
         </Button>
         <AnimatePresence>
@@ -74,9 +74,9 @@ export function FileUpload({ onFileSelect, accept, maxSize = 10 }: FileUploadPro
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
-              className="flex items-center gap-2 px-3 py-1 bg-muted rounded-md"
+              className="flex items-center gap-2 px-3 py-1 bg-muted/50 rounded-md border border-border/50"
             >
-              <File className="h-4 w-4" />
+              <File01Icon className="h-4 w-4" />
               <span className="text-sm">{file.name}</span>
               <span className="text-xs text-muted-foreground">
                 ({formatFileSize(file.size)})
@@ -86,9 +86,9 @@ export function FileUpload({ onFileSelect, accept, maxSize = 10 }: FileUploadPro
                 variant="ghost"
                 size="sm"
                 onClick={handleRemove}
-                className="h-6 w-6 p-0"
+                className="h-6 w-6 p-0 ml-1"
               >
-                <X className="h-3 w-3" />
+                <Cancel01Icon className="h-3 w-3" />
               </Button>
             </motion.div>
           )}
@@ -106,4 +106,3 @@ export function FileUpload({ onFileSelect, accept, maxSize = 10 }: FileUploadPro
     </div>
   );
 }
-

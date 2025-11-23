@@ -1,3 +1,5 @@
+export type TaskCategory = 'NLP' | 'Extraction' | 'Vision';
+
 export interface TaskTemplate {
   id: string;
   name: string;
@@ -6,7 +8,7 @@ export interface TaskTemplate {
   sampleInputs: Record<string, any>;
   defaultBudget: number;
   defaultSLA: number;
-  icon?: string;
+  category: TaskCategory;
 }
 
 export const taskTemplates: TaskTemplate[] = [
@@ -20,7 +22,7 @@ export const taskTemplates: TaskTemplate[] = [
     },
     defaultBudget: 0.1,
     defaultSLA: 5000,
-    icon: '🎯'
+    category: 'Extraction'
   },
   {
     id: 'analyze_sentiment',
@@ -32,7 +34,7 @@ export const taskTemplates: TaskTemplate[] = [
     },
     defaultBudget: 0.05,
     defaultSLA: 3000,
-    icon: '😊'
+    category: 'NLP'
   },
   {
     id: 'summarize_text',
@@ -44,7 +46,7 @@ export const taskTemplates: TaskTemplate[] = [
     },
     defaultBudget: 0.08,
     defaultSLA: 4000,
-    icon: '📝'
+    category: 'NLP'
   },
   {
     id: 'extract_contact_info',
@@ -56,7 +58,7 @@ export const taskTemplates: TaskTemplate[] = [
     },
     defaultBudget: 0.06,
     defaultSLA: 3000,
-    icon: '📇'
+    category: 'Extraction'
   },
   {
     id: 'parse_invoice',
@@ -68,7 +70,7 @@ export const taskTemplates: TaskTemplate[] = [
     },
     defaultBudget: 0.1,
     defaultSLA: 5000,
-    icon: '🧾'
+    category: 'Vision'
   },
   {
     id: 'extract_keywords',
@@ -80,7 +82,7 @@ export const taskTemplates: TaskTemplate[] = [
     },
     defaultBudget: 0.04,
     defaultSLA: 2000,
-    icon: '🔑'
+    category: 'Extraction'
   },
   {
     id: 'classify_text',
@@ -92,7 +94,7 @@ export const taskTemplates: TaskTemplate[] = [
     },
     defaultBudget: 0.05,
     defaultSLA: 3000,
-    icon: '🏷️'
+    category: 'NLP'
   },
   {
     id: 'translate_text',
@@ -105,11 +107,13 @@ export const taskTemplates: TaskTemplate[] = [
     },
     defaultBudget: 0.03,
     defaultSLA: 2500,
-    icon: '🌐'
+    category: 'NLP'
   }
 ];
 
 export function getTemplateById(id: string): TaskTemplate | undefined {
   return taskTemplates.find(t => t.id === id);
 }
+
+
 

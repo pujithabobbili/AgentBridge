@@ -1,0 +1,18 @@
+{
+  "include": [
+    "hub",
+    "providers",
+    "shared"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/node_modules"
+  ],
+  "extraPaths": [
+    "shared"
+  ],
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false
+}
+

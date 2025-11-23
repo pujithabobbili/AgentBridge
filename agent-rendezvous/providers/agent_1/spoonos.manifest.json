@@ -1,0 +1,10 @@
+{
+  "name": "poster-ocr-regex",
+  "permissions": {
+    "net_allow": [],
+    "fs_read": ["/mnt/data"],
+    "fs_write": []
+  },
+  "resources": { "cpu": 1, "ram_mb": 256, "timeout_ms": 5000 },
+  "routes": { "proposal": "/proposal", "execute": "/execute" }
+}

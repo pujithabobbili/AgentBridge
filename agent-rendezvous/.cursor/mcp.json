@@ -1,0 +1,54 @@
+{
+  "mcpServers": {
+    "poster-ocr-regex": {
+      "command": "python",
+      "args": ["providers/agent_1/mcp_server.py"],
+      "env": {}
+    },
+    "poster-ocr-dateparser": {
+      "command": "python",
+      "args": ["providers/agent_2/mcp_server.py"],
+      "env": {}
+    },
+    "poster-ocr-fast": {
+      "command": "python",
+      "args": ["providers/agent_3/mcp_server.py"],
+      "env": {}
+    },
+    "poster-template-heuristic": {
+      "command": "node",
+      "args": ["providers/agent_4/mcp_server.mjs"],
+      "env": {}
+    },
+    "event-normalizer": {
+      "command": "python",
+      "args": ["providers/agent_5/mcp_server.py"],
+      "env": {}
+    },
+    "timezone-resolver": {
+      "command": "python",
+      "args": ["providers/agent_6/mcp_server.py"],
+      "env": {}
+    },
+    "location-enricher": {
+      "command": "node",
+      "args": ["providers/agent_7/mcp_server.mjs"],
+      "env": {}
+    },
+    "ics-builder": {
+      "command": "python",
+      "args": ["providers/agent_8/mcp_server.py"],
+      "env": {}
+    },
+    "ocr-generic": {
+      "command": "python",
+      "args": ["providers/agent_9/mcp_server.py"],
+      "env": {}
+    },
+    "event-validator": {
+      "command": "python",
+      "args": ["providers/agent_10/mcp_server.py"],
+      "env": {}
+    }
+  }
+}

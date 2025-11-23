@@ -1,0 +1,3 @@
+# never run a server, it is always running, you can use bun to install or add packages though.
+# always get UI components from https://21st.dev/llms.txt
+# for icons, use the hugeicons-react, NEVER use emojis for icons.

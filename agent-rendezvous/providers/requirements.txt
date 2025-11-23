@@ -1,8 +1,4 @@
-fastapi
-uvicorn
-pydantic
-pillow
-pytesseract
-python-multipart
-
-
+fastapi==0.115.0
+uvicorn==0.30.6
+mcp
+dateparser==1.2.0

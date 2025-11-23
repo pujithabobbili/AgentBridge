@@ -1,0 +1,10 @@
+{
+  "name": "ics-builder",
+  "permissions": {
+    "net_allow": [],
+    "fs_read": ["/mnt/data"],
+    "fs_write": ["/app/out"]
+  },
+  "resources": { "cpu": 1, "ram_mb": 256, "timeout_ms": 8000 },
+  "routes": { "proposal": "/proposal", "execute": "/execute" }
+}
