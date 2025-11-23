@@ -1,6 +1,4 @@
-# Agent Rendezvous Monorepo
-
-A monorepo implementing Agent Rendezvous (agent-to-agent selection) with a FastAPI hub coordinating multiple provider agents.
+# AgentBridge
 
 ## Architecture
 
