@@ -194,7 +194,9 @@ async def fetch_proposal(provider: Dict[str, str], intent: Intent) -> Dict[str, 
                         "location-enricher": {"est_cost_usd": 0.01, "est_latency_ms": 300, "confidence": 0.75},
                         "ics-builder": {"est_cost_usd": 0.01, "est_latency_ms": 200, "confidence": 0.9},
                         "ocr-generic": {"est_cost_usd": 0.008, "est_latency_ms": 500, "confidence": 0.7},
-                        "event-validator": {"est_cost_usd": 0.004, "est_latency_ms": 80, "confidence": 0.95}
+                        "event-validator": {"est_cost_usd": 0.004, "est_latency_ms": 80, "confidence": 0.95},
+                        "chatgpt": {"est_cost_usd": 0.02, "est_latency_ms": 700, "confidence": 0.9},
+                        "gemini": {"est_cost_usd": 0.015, "est_latency_ms": 600, "confidence": 0.9}
                     }
                     defaults = agent_defaults.get(provider["name"], {"est_cost_usd": 0.01, "est_latency_ms": 250, "confidence": 0.8})
                     proposal_data = {
@@ -360,7 +362,9 @@ async def execute(intent: Intent):
                             "location-enricher": {"name": "enrich_location", "arg_key": "location"},
                             "ics-builder": {"name": "build_ics", "arg_key": "event_data"},
                             "ocr-generic": {"name": "ocr_image", "arg_key": "image_path"},
-                            "event-validator": {"name": "validate_event", "arg_key": "event_json"}
+                            "event-validator": {"name": "validate_event", "arg_key": "event_json"},
+                            "chatgpt": {"name": "chat_complete", "arg_key": "text"},
+                            "gemini": {"name": "gemini_complete", "arg_key": "text"}
                         }
                         agent_id = provider["name"]
                         tool_def = tool_map.get(agent_id)

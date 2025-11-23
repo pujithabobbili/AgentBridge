@@ -49,6 +49,16 @@
       "command": "python",
       "args": ["providers/agent_10/mcp_server.py"],
       "env": {}
+    },
+    "chatgpt": {
+      "command": "python",
+      "args": ["providers/agent_11/mcp_server.py"],
+      "env": {}
+    },
+    "gemini": {
+      "command": "python",
+      "args": ["providers/agent_12/mcp_server.py"],
+      "env": {}
     }
   }
 }
