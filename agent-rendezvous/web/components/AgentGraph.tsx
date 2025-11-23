@@ -18,7 +18,7 @@ interface AgentGraphProps {
 
 export function AgentGraph({ intent, agents = [], active = false }: AgentGraphProps) {
     const { theme } = useTheme();
-    const fgRef = useRef<any>();
+    const fgRef = useRef<any>(null);
     const [graphData, setGraphData] = useState<{ nodes: any[]; links: any[] }>({ nodes: [], links: [] });
 
     // Mock agent data if none provided, to show a rich graph
@@ -93,8 +93,7 @@ export function AgentGraph({ intent, agents = [], active = false }: AgentGraphPr
                     backgroundColor="#020617" // slate-950
                     showNavInfo={false}
                     enableNodeDrag={false}
-                    enableZoomInteraction={true}
-                    enableRotateInteraction={true}
+                    // interactions handled by library defaults
                     onEngineStop={() => fgRef.current?.zoomToFit(400)}
                 />
             )}

@@ -38,19 +38,51 @@ app.add_middleware(
 PROVIDERS = []
 SPOON = SpoonOSClient()
 
+# Goal-to-agent capability mapping to ensure relevant proposals
+GOAL_CAPABILITIES: Dict[str, List[str]] = {
+    "extract_event": [
+        "poster-ocr-regex",
+        "event-normalizer",
+        "timezone-resolver",
+        "ics-builder",
+        "ocr-generic",
+        "event-validator",
+    ],
+    "summarize_text": ["chatgpt", "gemini"],
+    "translate_text": ["chatgpt", "gemini"],
+    "analyze_sentiment": ["chatgpt", "gemini"],
+    "extract_keywords": ["chatgpt", "gemini"],
+    "classify_text": ["chatgpt", "gemini"],
+    "parse_invoice": ["ocr-generic", "chatgpt", "gemini"],
+}
+
+def provider_is_eligible(provider: Dict[str, Any], goal: str) -> bool:
+    if goal not in GOAL_CAPABILITIES:
+        return True
+    pid = provider.get("id") or provider.get("name")
+    return pid in GOAL_CAPABILITIES[goal]
+
 @app.on_event("startup")
 async def startup_event():
     """Load MCP agents from configuration on startup."""
     global PROVIDERS
     mcp_servers = load_mcp_servers()
     for server in mcp_servers:
+        env = server.env or {}
+        # Inject common secrets from process env if not provided in config
+        if server.id == "chatgpt" and "OPENAI_API_KEY" not in env and os.getenv("OPENAI_API_KEY"):
+            env["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+        if server.id == "gemini" and "GEMINI_API_KEY" not in env and os.getenv("GEMINI_API_KEY"):
+            env["GEMINI_API_KEY"] = os.getenv("GEMINI_API_KEY")
+        if server.id == "timezone-resolver" and "TIMEZONEDB_API_KEY" not in env and os.getenv("TIMEZONEDB_API_KEY"):
+            env["TIMEZONEDB_API_KEY"] = os.getenv("TIMEZONEDB_API_KEY")
         PROVIDERS.append({
             "id": server.id,
             "name": server.id,
             "url": "stdio",
             "command": server.command,
             "args": server.args,
-            "env": server.env
+            "env": env
         })
     manifest_map = {
         "poster-ocr-regex": str(Path(__file__).parent.parent / "providers" / "agent_1" / "spoonos.manifest.json"),
@@ -101,6 +133,11 @@ def calculate_score(proposal: Proposal) -> float:
 async def fetch_proposal(provider: Dict[str, str], intent: Intent) -> Dict[str, Any]:
     """Fetch proposal from a single provider (HTTP or MCP)."""
 
+    def apply_goal_penalty(pid: str, score: float) -> (float, bool):
+        if intent.goal in GOAL_CAPABILITIES and pid not in GOAL_CAPABILITIES[intent.goal]:
+            return score * 0.2, True
+        return score, False
+
     if provider.get("spoonos"):
         try:
             manifest = provider.get("manifest", {})
@@ -130,10 +167,12 @@ async def fetch_proposal(provider: Dict[str, str], intent: Intent) -> Dict[str, 
             }
             proposal = Proposal(**{k: v for k, v in proposal_data.items() if k in ["est_cost_usd","est_latency_ms","confidence","plan","needs"]})
             score = calculate_score(proposal)
+            score, mismatch = apply_goal_penalty(provider["id"], score)
             return {
                 "_agent": provider["id"],
                 "_agent_name": provider["name"],
                 "_score": score,
+                "_goal_mismatch": mismatch,
                 **proposal_data
             }
         except Exception:
@@ -154,10 +193,12 @@ async def fetch_proposal(provider: Dict[str, str], intent: Intent) -> Dict[str, 
             }
             proposal = Proposal(**{k: v for k, v in proposal_data.items() if k in ["est_cost_usd","est_latency_ms","confidence","plan","needs"]})
             score = calculate_score(proposal)
+            score, mismatch = apply_goal_penalty(provider["id"], score)
             return {
                 "_agent": provider["id"],
                 "_agent_name": provider["name"],
                 "_score": score,
+                "_goal_mismatch": mismatch,
                 **proposal_data
             }
 
@@ -205,15 +246,38 @@ async def fetch_proposal(provider: Dict[str, str], intent: Intent) -> Dict[str, 
                     }
                     proposal = Proposal(**proposal_data)
                     score = calculate_score(proposal)
+                    score, mismatch = apply_goal_penalty(provider["id"], score)
                     return {
                         "_agent": provider["id"],
                         "_agent_name": provider["name"],
                         "_score": score,
+                        "_goal_mismatch": mismatch,
                         **proposal_data
                     }
         except Exception as e:
             print(f"MCP proposal error from {provider['name']}: {e}")
-            return None
+            agent_defaults = {
+                "chatgpt": {"est_cost_usd": 0.02, "est_latency_ms": 700, "confidence": 0.7},
+                "gemini": {"est_cost_usd": 0.015, "est_latency_ms": 600, "confidence": 0.7}
+            }
+            defaults = agent_defaults.get(provider["name"], {"est_cost_usd": 0.02, "est_latency_ms": 800, "confidence": 0.6})
+            proposal_data = {
+                "est_cost_usd": defaults["est_cost_usd"],
+                "est_latency_ms": defaults["est_latency_ms"],
+                "confidence": defaults["confidence"],
+                "plan": ["LLM tool unavailable; using defaults"],
+                "needs": {}
+            }
+            proposal = Proposal(**proposal_data)
+            score = calculate_score(proposal)
+            score, mismatch = apply_goal_penalty(provider["id"], score)
+            return {
+                "_agent": provider["id"],
+                "_agent_name": provider["name"],
+                "_score": score,
+                "_goal_mismatch": mismatch,
+                **proposal_data
+            }
 
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
@@ -225,10 +289,12 @@ async def fetch_proposal(provider: Dict[str, str], intent: Intent) -> Dict[str, 
                 proposal_data = response.json()
                 proposal = Proposal(**proposal_data)
                 score = calculate_score(proposal)
+                score, mismatch = apply_goal_penalty(provider["id"], score)
                 return {
                     "_agent": provider["id"],
                     "_agent_name": provider["name"],
                     "_score": score,
+                    "_goal_mismatch": mismatch,
                     **proposal_data
                 }
     except (httpx.TimeoutException, httpx.ConnectError, httpx.RequestError) as e:
@@ -259,18 +325,30 @@ def filter_and_sort_proposals(
             if prop["est_latency_ms"] > intent.sla["deadline_ms"]:
                 continue
         
+        # Filter by capability when at least one proposal matches; otherwise allow fallback
+        if intent.goal in GOAL_CAPABILITIES:
+            any_match = any(p and p.get("_agent") in GOAL_CAPABILITIES[intent.goal] for p in proposals)
+            if any_match and prop.get("_agent") not in GOAL_CAPABILITIES[intent.goal]:
+                continue
         filtered.append(prop)
     
-    # Sort by score descending
-    filtered.sort(key=lambda x: x["_score"], reverse=True)
+    # Sort by score descending with fair tie-breakers: lower cost, lower latency, higher confidence, stable id
+    filtered.sort(key=lambda x: (
+        -x["_score"],
+        x.get("est_cost_usd", float("inf")),
+        x.get("est_latency_ms", float("inf")),
+        -x.get("confidence", 0.0),
+        x.get("_agent", "")
+    ))
     return filtered
 
 
 @app.post("/post_intent")
 async def post_intent(intent: Intent):
     """Broadcast intent to all providers and return scored proposals."""
-    # Fetch proposals from all providers concurrently
-    tasks = [fetch_proposal(provider, intent) for provider in PROVIDERS]
+    # Fetch proposals from eligible providers concurrently (fallback to all if none mapped)
+    eligible = [p for p in PROVIDERS if provider_is_eligible(p, intent.goal)] or PROVIDERS
+    tasks = [fetch_proposal(provider, intent) for provider in eligible]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     
     # Filter out None and exceptions
@@ -278,15 +356,18 @@ async def post_intent(intent: Intent):
     
     # Filter and sort
     filtered_proposals = filter_and_sort_proposals(proposals, intent)
-    
-    return {"proposals": filtered_proposals}
+    with_explanations = [
+        {**prop, "explanation": build_explanation(prop, intent)} for prop in filtered_proposals
+    ]
+    return {"proposals": with_explanations}
 
 
 @app.post("/execute")
 async def execute(intent: Intent):
     """Execute task on best available provider with fallback."""
-    # Re-run scoring to get current best provider
-    tasks = [fetch_proposal(provider, intent) for provider in PROVIDERS]
+    # Re-run scoring on eligible providers to get current best provider
+    eligible = [p for p in PROVIDERS if provider_is_eligible(p, intent.goal)] or PROVIDERS
+    tasks = [fetch_proposal(provider, intent) for provider in eligible]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     
     proposals = [r for r in results if r is not None and not isinstance(r, Exception)]
@@ -324,6 +405,7 @@ async def execute(intent: Intent):
                     "winner_name": provider["name"],
                     "proposal": {k: v for k, v in proposal_data.items() if not k.startswith("_")},
                     "result": result,
+                    "explanation": build_explanation(proposal_data, intent),
                     "sandboxId": sandbox,
                     "logs_url": SPOON.logs_url(sandbox)
                 }
@@ -368,11 +450,25 @@ async def execute(intent: Intent):
                             arg_key = tool_def["arg_key"]
                             arg_val = intent.inputs.get(arg_key) or intent.inputs.get("text") or ""
                             result = await session.call_tool(tool_def["name"], {arg_key: arg_val})
+                            # Normalize MCP result content
+                            data_content: List[Any] = []
+                            try:
+                                if hasattr(result, "content") and isinstance(result.content, list):
+                                    data_content = [c.model_dump() if hasattr(c, "model_dump") else c for c in result.content]
+                                elif isinstance(result, str):
+                                    data_content = [{"type": "text", "text": result}]
+                                elif isinstance(result, dict):
+                                    data_content = [{"type": "json", "json": result}]
+                                else:
+                                    data_content = [{"type": "text", "text": str(result)}]
+                            except Exception:
+                                data_content = [{"type": "text", "text": ""}]
                             return {
                                 "winner": provider_id,
                                 "winner_name": provider["name"],
                                 "proposal": {k: v for k, v in proposal_data.items() if not k.startswith("_")},
-                                "result": {"status": "OK", "data": {"content": [c.model_dump() if hasattr(c, "model_dump") else c for c in result.content]}}
+                                "result": {"status": "OK", "data": {"content": data_content}},
+                                "explanation": build_explanation(proposal_data, intent)
                             }
             except Exception as e:
                 last_error = f"MCP execution error on {provider_id}: {str(e)}"
@@ -390,7 +486,8 @@ async def execute(intent: Intent):
                         "winner": provider_id,
                         "winner_name": provider["name"],
                         "proposal": {k: v for k, v in proposal_data.items() if not k.startswith("_")},
-                        "result": result_data
+                        "result": result_data,
+                        "explanation": build_explanation(proposal_data, intent)
                     }
                 else:
                     last_error = f"Provider {provider_id} returned status {response.status_code}"
@@ -427,3 +524,43 @@ async def get_agents():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+def build_explanation(proposal_data: Dict[str, Any], intent: Intent) -> Dict[str, Any]:
+    try:
+        proposal = Proposal(
+            est_cost_usd=proposal_data.get("est_cost_usd", 0.0),
+            est_latency_ms=proposal_data.get("est_latency_ms", 0.0),
+            confidence=proposal_data.get("confidence", 0.0),
+            plan=proposal_data.get("plan", []),
+            needs=proposal_data.get("needs", {})
+        )
+        score = calculate_score(proposal)
+        budget_ok = True
+        sla_ok = True
+        if intent.budget and "max_usd" in intent.budget:
+            budget_ok = proposal.est_cost_usd <= intent.budget["max_usd"]
+        if intent.sla and "deadline_ms" in intent.sla:
+            sla_ok = proposal.est_latency_ms <= intent.sla["deadline_ms"]
+        notes = [
+            "Filtered by budget and deadline before ranking",
+            "Ties broken by lower cost, then lower latency, then higher confidence"
+        ]
+        if intent.goal in GOAL_CAPABILITIES and proposal_data.get("_agent") not in GOAL_CAPABILITIES[intent.goal]:
+            notes.append("Agent is not goal-aligned; fallback with penalty applied")
+        return {
+            "score": score,
+            "formula": "confidence / (cost * (1 + latency/5000))",
+            "inputs": {
+                "confidence": proposal.confidence,
+                "cost_usd": proposal.est_cost_usd,
+                "latency_ms": proposal.est_latency_ms
+            },
+            "constraints": {
+                "budget_max_usd": intent.budget.get("max_usd") if intent.budget else None,
+                "sla_deadline_ms": intent.sla.get("deadline_ms") if intent.sla else None,
+                "budget_ok": budget_ok,
+                "sla_ok": sla_ok
+            },
+            "notes": notes
+        }
+    except Exception:
+        return {}

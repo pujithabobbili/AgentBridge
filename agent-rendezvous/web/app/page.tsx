@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -64,6 +64,7 @@ export default function Home() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [streamingProposals, setStreamingProposals] = useState<Proposal[]>([]);
   const [executionResult, setExecutionResult] = useState<any>(null);
+  const [showWhy, setShowWhy] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingType, setLoadingType] = useState<'intent' | 'execute' | null>(null);
@@ -78,12 +79,21 @@ export default function Home() {
   const hubUrl = process.env.NEXT_PUBLIC_HUB_URL || 'http://localhost:8000';
 
   // Fetch agents on mount
-  useState(() => {
-    fetch(`${hubUrl}/agents`)
-      .then(res => res.json())
-      .then(data => setAvailableAgents(data))
-      .catch(err => console.error('Failed to fetch agents:', err));
-  });
+  useEffect(() => {
+    const ac = new AbortController();
+    const load = async () => {
+      try {
+        const res = await fetch(`${hubUrl}/agents`, { signal: ac.signal });
+        if (!res.ok) return;
+        const data = await res.json();
+        setAvailableAgents(data);
+      } catch (err) {
+        // swallow during prerender/hydration
+      }
+    };
+    load();
+    return () => ac.abort();
+  }, [hubUrl]);
 
   const handleTemplateSelect = (template: TaskTemplate) => {
     setSelectedTemplate(template.id);
@@ -570,6 +580,66 @@ export default function Home() {
                             <span className="text-sm text-muted-foreground">Winner</span>
                             <Badge variant="success">{executionResult.winner_name}</Badge>
                           </div>
+                          <div className="flex justify-between items-center p-3 bg-background/40 rounded-lg">
+                            <span className="text-sm text-muted-foreground">Why this agent?</span>
+                            <Button variant="outline" size="sm" onClick={() => setShowWhy((v) => !v)}>
+                              {showWhy ? 'Hide' : 'Explain'}
+                            </Button>
+                          </div>
+                          {showWhy && executionResult.explanation && (
+                            <div className="rounded-lg border bg-background/50 p-4">
+                              <div className="text-sm space-y-2">
+                                {(() => {
+                                  const winner = displayProposals[0];
+                                  const peer = displayProposals.length > 1 ? displayProposals[1] : null;
+                                  const scoreDelta = peer ? (winner._score - peer._score) : null;
+                                  const costDelta = peer ? (winner.est_cost_usd - peer.est_cost_usd) : null;
+                                  const latDelta = peer ? (winner.est_latency_ms - peer.est_latency_ms) : null;
+                                  const budgetMax = executionResult.explanation.constraints?.budget_max_usd ?? null;
+                                  const deadlineMs = executionResult.explanation.constraints?.sla_deadline_ms ?? null;
+                                  const cost = executionResult.explanation.inputs?.cost_usd ?? winner?.est_cost_usd;
+                                  const latency = executionResult.explanation.inputs?.latency_ms ?? winner?.est_latency_ms;
+                                  const budgetHeadroom = budgetMax != null && cost != null ? (budgetMax - cost) : null;
+                                  const timeHeadroom = deadlineMs != null && latency != null ? (deadlineMs - latency) : null;
+                                  return (
+                                    <>
+                                      {peer && (
+                                        <>
+                                          <div className="flex justify-between"><span>Score lead vs {peer._agent_name}</span><span className="font-mono">{(scoreDelta as number).toFixed(2)}</span></div>
+                                          <div className="flex justify-between"><span>Cost Δ vs {peer._agent_name}</span><span className="font-mono">{(costDelta as number).toFixed(4)}</span></div>
+                                          <div className="flex justify-between"><span>Latency Δ vs {peer._agent_name}</span><span className="font-mono">{(latDelta as number)}ms</span></div>
+                                        </>
+                                      )}
+                                      {budgetHeadroom != null && (
+                                        <div className="flex justify-between"><span>Budget headroom</span><span className="font-mono">{budgetHeadroom.toFixed(4)} USD</span></div>
+                                      )}
+                                      {timeHeadroom != null && (
+                                        <div className="flex justify-between"><span>Deadline headroom</span><span className="font-mono">{timeHeadroom} ms</span></div>
+                                      )}
+                                    </>
+                                  );
+                                })()}
+                                {Array.isArray(executionResult.proposal?.plan) && (
+                                  <div className="mt-2">
+                                    <div className="text-xs text-muted-foreground">Plan preview</div>
+                                    <ul className="list-disc list-inside text-xs">
+                                      {executionResult.proposal.plan.slice(0, 2).map((s: string, i: number) => (
+                                        <li key={i} className="font-mono">{s}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                                {Array.isArray(executionResult.explanation.notes) && (
+                                  <ul className="mt-2 list-disc list-inside text-xs text-muted-foreground">
+                                    {executionResult.explanation.notes.map((n: string, i: number) => (
+                                      <li key={i}>{n}</li>
+                                    ))}
+                                  </ul>
+                                )}
+                                <div className="mt-2 text-xs text-muted-foreground">Formula: {executionResult.explanation.formula}</div>
+                              </div>
+                            </div>
+                          )}
                           {executionResult.sandboxId && (
                             <div className="flex justify-between items-center p-3 bg-background/40 rounded-lg">
                               <span className="text-sm text-muted-foreground">Sandbox</span>

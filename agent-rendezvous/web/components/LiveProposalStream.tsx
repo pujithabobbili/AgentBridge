@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { ChampionIcon, Activity02Icon, Clock01Icon, Coins01Icon } from 'hugeicons-react';
@@ -15,6 +16,7 @@ interface Proposal {
   plan: string[];
   permissions?: any;
   sandboxId?: string;
+  explanation?: any;
 }
 
 interface LiveProposalStreamProps {
@@ -23,6 +25,7 @@ interface LiveProposalStreamProps {
 }
 
 export function LiveProposalStream({ proposals, isLoading }: LiveProposalStreamProps) {
+  const [openIdx, setOpenIdx] = useState<number | null>(null);
   if (!isLoading && proposals.length === 0) {
     return null;
   }
@@ -78,22 +81,33 @@ export function LiveProposalStream({ proposals, isLoading }: LiveProposalStreamP
                                </Badge>
                             )}
                          </div>
-                         <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                            <span>{prop.plan.length} steps</span>
-                            <span>•</span>
-                            <span>{(prop.confidence * 100).toFixed(0)}% confidence</span>
-                            {prop.permissions && (
-                              <>
-                                <span>•</span>
-                                {prop.permissions.fs && <Badge variant="outline" className="h-4 px-1 text-[10px]">FS</Badge>}
-                                {prop.permissions.net && <Badge variant="outline" className="h-4 px-1 text-[10px]">NET</Badge>}
-                                {prop.permissions.cpu && <Badge variant="outline" className="h-4 px-1 text-[10px]">CPU {prop.permissions.cpu}</Badge>}
-                                {prop.permissions.ram_mb && <Badge variant="outline" className="h-4 px-1 text-[10px]">RAM {prop.permissions.ram_mb}MB</Badge>}
-                                {prop.permissions.timeout_ms && <Badge variant="outline" className="h-4 px-1 text-[10px]">T/O {prop.permissions.timeout_ms}ms</Badge>}
-                              </>
-                            )}
-                         </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                         <span>{prop.plan.length} steps</span>
+                         <span>•</span>
+                         <span>{(prop.confidence * 100).toFixed(0)}% confidence</span>
+                         {prop.explanation && (
+                           <>
+                             <span>•</span>
+                             <button
+                               className="text-[10px] underline underline-offset-2"
+                               onClick={() => setOpenIdx(openIdx === idx ? null : idx)}
+                             >
+                               Why?
+                             </button>
+                           </>
+                         )}
+                         {prop.permissions && (
+                           <>
+                             <span>•</span>
+                             {prop.permissions.fs && <Badge variant="outline" className="h-4 px-1 text-[10px]">FS</Badge>}
+                             {prop.permissions.net && <Badge variant="outline" className="h-4 px-1 text-[10px]">NET</Badge>}
+                             {prop.permissions.cpu && <Badge variant="outline" className="h-4 px-1 text-[10px]">CPU {prop.permissions.cpu}</Badge>}
+                             {prop.permissions.ram_mb && <Badge variant="outline" className="h-4 px-1 text-[10px]">RAM {prop.permissions.ram_mb}MB</Badge>}
+                             {prop.permissions.timeout_ms && <Badge variant="outline" className="h-4 px-1 text-[10px]">T/O {prop.permissions.timeout_ms}ms</Badge>}
+                           </>
+                         )}
                       </div>
+                   </div>
                    </div>
 
                    {/* Right: Metrics */}
@@ -128,6 +142,60 @@ export function LiveProposalStream({ proposals, isLoading }: LiveProposalStreamP
                       <div className="absolute inset-0 rounded-lg bg-primary/5 pointer-events-none animate-pulse" />
                    )}
                 </div>
+                {openIdx === idx && prop.explanation && (
+                  <div className="mt-2 p-3 rounded-lg border bg-background/40">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      {(() => {
+                        const peer = proposals[(idx === 0 ? 1 : 0)] as any;
+                        const hasPeer = Boolean(peer);
+                        const scoreDelta = hasPeer ? (prop._score - peer._score) : undefined;
+                        const costDelta = hasPeer ? (prop.est_cost_usd - peer.est_cost_usd) : undefined;
+                        const latDelta = hasPeer ? (prop.est_latency_ms - peer.est_latency_ms) : undefined;
+                        const budgetMax = prop.explanation.constraints?.budget_max_usd ?? null;
+                        const deadlineMs = prop.explanation.constraints?.sla_deadline_ms ?? null;
+                        const cost = prop.explanation.inputs?.cost_usd ?? prop.est_cost_usd;
+                        const latency = prop.explanation.inputs?.latency_ms ?? prop.est_latency_ms;
+                        const budgetHeadroom = budgetMax != null ? (budgetMax - cost) : null;
+                        const timeHeadroom = deadlineMs != null ? (deadlineMs - latency) : null;
+                        return (
+                          <>
+                            {hasPeer && (
+                              <>
+                                <div className="flex justify-between"><span>Score lead vs {peer._agent_name}</span><span className="font-mono">{(scoreDelta as number).toFixed(2)}</span></div>
+                                <div className="flex justify-between"><span>Cost Δ vs {peer._agent_name}</span><span className="font-mono">{(costDelta as number).toFixed(4)}</span></div>
+                                <div className="flex justify-between"><span>Latency Δ vs {peer._agent_name}</span><span className="font-mono">{(latDelta as number)}ms</span></div>
+                              </>
+                            )}
+                            {budgetHeadroom != null && (
+                              <div className="flex justify-between"><span>Budget headroom</span><span className="font-mono">{budgetHeadroom.toFixed(4)} USD</span></div>
+                            )}
+                            {timeHeadroom != null && (
+                              <div className="flex justify-between"><span>Deadline headroom</span><span className="font-mono">{timeHeadroom} ms</span></div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                    {Array.isArray(prop.plan) && prop.plan.length > 0 && (
+                      <div className="mt-2 text-xs">
+                        <div className="mb-1 text-muted-foreground">Plan preview</div>
+                        <ul className="list-disc list-inside">
+                          {prop.plan.slice(0, 2).map((s, i) => (
+                            <li key={i} className="font-mono">{s}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {Array.isArray(prop.explanation.notes) && (
+                      <ul className="mt-2 list-disc list-inside text-[10px] text-muted-foreground">
+                        {prop.explanation.notes.map((n: string, i: number) => (
+                          <li key={i}>{n}</li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className="mt-2 text-[10px] text-muted-foreground">Formula: {prop.explanation.formula}</div>
+                  </div>
+                )}
               </motion.div>
             );
           })}
