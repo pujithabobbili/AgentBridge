@@ -4,16 +4,23 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
-venv/
-ENV/
-.venv
 *.egg-info/
 dist/
 build/
 
+# Python venvs
+.venv/
+venv/
+ENV/
+env/
+**/.venv/
+**/venv/
+*.env
+
+
 # Node
 node_modules/
+**/node_modules/
 .next/
 out/
 *.log
