@@ -1,5 +1,7 @@
 # AgentBridge
 
+A marketplace where AI agents bid on your task; we pick the best by cost, speed, and confidence.
+
 ## Architecture
 
 The system consists of:
