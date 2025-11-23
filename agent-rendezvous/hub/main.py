@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 from typing import List, Dict, Any
+import time
 import asyncio
 import json
 MCP_AVAILABLE = True
@@ -37,6 +38,7 @@ app.add_middleware(
 # Dynamic providers list (initially loaded from config)
 PROVIDERS = []
 SPOON = SpoonOSClient()
+LAST_TRACE: Dict[str, Any] = {}
 
 # Goal-to-agent capability mapping to ensure relevant proposals
 GOAL_CAPABILITIES: Dict[str, List[str]] = {
@@ -61,6 +63,9 @@ def provider_is_eligible(provider: Dict[str, Any], goal: str) -> bool:
         return True
     pid = provider.get("id") or provider.get("name")
     return pid in GOAL_CAPABILITIES[goal]
+
+def select_providers_for_intent(intent: Intent) -> List[Dict[str, Any]]:
+    return [p for p in PROVIDERS if provider_is_eligible(p, intent.goal)] or PROVIDERS
 
 @app.on_event("startup")
 async def startup_event():
@@ -139,6 +144,7 @@ async def fetch_proposal(provider: Dict[str, str], intent: Intent) -> Dict[str, 
         return score, False
 
     if provider.get("spoonos"):
+        t0 = time.perf_counter()
         try:
             manifest = provider.get("manifest", {})
             sandbox = await SPOON.spawn(manifest)
@@ -168,14 +174,17 @@ async def fetch_proposal(provider: Dict[str, str], intent: Intent) -> Dict[str, 
             proposal = Proposal(**{k: v for k, v in proposal_data.items() if k in ["est_cost_usd","est_latency_ms","confidence","plan","needs"]})
             score = calculate_score(proposal)
             score, mismatch = apply_goal_penalty(provider["id"], score)
+            rtt_ms = int((time.perf_counter() - t0) * 1000)
             return {
                 "_agent": provider["id"],
                 "_agent_name": provider["name"],
                 "_score": score,
                 "_goal_mismatch": mismatch,
+                "_telemetry": {"rtt_ms": rtt_ms},
                 **proposal_data
             }
         except Exception:
+            rtt_ms = int((time.perf_counter() - t0) * 1000)
             agent_defaults = {
                 "poster-ocr-fast": {"est_cost_usd": 0.005, "est_latency_ms": 200, "confidence": 0.65},
                 "poster-ocr-regex": {"est_cost_usd": 0.01, "est_latency_ms": 500, "confidence": 0.75},
@@ -199,11 +208,13 @@ async def fetch_proposal(provider: Dict[str, str], intent: Intent) -> Dict[str, 
                 "_agent_name": provider["name"],
                 "_score": score,
                 "_goal_mismatch": mismatch,
+                "_telemetry": {"rtt_ms": rtt_ms},
                 **proposal_data
             }
 
     # Handle MCP stdio agents
     if provider.get("url") == "stdio":
+        t0 = time.perf_counter()
         if not MCP_AVAILABLE:
             return {
                 "_agent": provider["id"],
@@ -213,7 +224,8 @@ async def fetch_proposal(provider: Dict[str, str], intent: Intent) -> Dict[str, 
                 "est_latency_ms": 250,
                 "confidence": 0.8,
                 "plan": [f"Execute via MCP tool on {provider['name']} (simulated)"],
-                "needs": {}
+                "needs": {},
+                "_telemetry": {"rtt_ms": int((time.perf_counter() - t0) * 1000)}
             }
         server_params = StdioServerParameters(
             command=provider["command"],
@@ -247,15 +259,18 @@ async def fetch_proposal(provider: Dict[str, str], intent: Intent) -> Dict[str, 
                     proposal = Proposal(**proposal_data)
                     score = calculate_score(proposal)
                     score, mismatch = apply_goal_penalty(provider["id"], score)
+                    rtt_ms = int((time.perf_counter() - t0) * 1000)
                     return {
                         "_agent": provider["id"],
                         "_agent_name": provider["name"],
                         "_score": score,
                         "_goal_mismatch": mismatch,
+                        "_telemetry": {"rtt_ms": rtt_ms},
                         **proposal_data
                     }
         except Exception as e:
             print(f"MCP proposal error from {provider['name']}: {e}")
+            rtt_ms = int((time.perf_counter() - t0) * 1000)
             agent_defaults = {
                 "chatgpt": {"est_cost_usd": 0.02, "est_latency_ms": 700, "confidence": 0.7},
                 "gemini": {"est_cost_usd": 0.015, "est_latency_ms": 600, "confidence": 0.7}
@@ -276,10 +291,12 @@ async def fetch_proposal(provider: Dict[str, str], intent: Intent) -> Dict[str, 
                 "_agent_name": provider["name"],
                 "_score": score,
                 "_goal_mismatch": mismatch,
+                "_telemetry": {"rtt_ms": rtt_ms},
                 **proposal_data
             }
 
     try:
+        t0 = time.perf_counter()
         async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
             response = await client.post(
                 f"{provider['url']}/intent",
@@ -290,11 +307,13 @@ async def fetch_proposal(provider: Dict[str, str], intent: Intent) -> Dict[str, 
                 proposal = Proposal(**proposal_data)
                 score = calculate_score(proposal)
                 score, mismatch = apply_goal_penalty(provider["id"], score)
+                rtt_ms = int((time.perf_counter() - t0) * 1000)
                 return {
                     "_agent": provider["id"],
                     "_agent_name": provider["name"],
                     "_score": score,
                     "_goal_mismatch": mismatch,
+                    "_telemetry": {"rtt_ms": rtt_ms},
                     **proposal_data
                 }
     except (httpx.TimeoutException, httpx.ConnectError, httpx.RequestError) as e:
@@ -347,7 +366,7 @@ def filter_and_sort_proposals(
 async def post_intent(intent: Intent):
     """Broadcast intent to all providers and return scored proposals."""
     # Fetch proposals from eligible providers concurrently (fallback to all if none mapped)
-    eligible = [p for p in PROVIDERS if provider_is_eligible(p, intent.goal)] or PROVIDERS
+    eligible = select_providers_for_intent(intent)
     tasks = [fetch_proposal(provider, intent) for provider in eligible]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     
@@ -366,7 +385,7 @@ async def post_intent(intent: Intent):
 async def execute(intent: Intent):
     """Execute task on best available provider with fallback."""
     # Re-run scoring on eligible providers to get current best provider
-    eligible = [p for p in PROVIDERS if provider_is_eligible(p, intent.goal)] or PROVIDERS
+    eligible = select_providers_for_intent(intent)
     tasks = [fetch_proposal(provider, intent) for provider in eligible]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     
@@ -514,6 +533,27 @@ async def root():
         "providers": PROVIDERS
     }
 
+class JobsRequest(BaseModel):
+    intents: List[Intent]
+
+@app.post("/jobs")
+async def jobs(req: JobsRequest):
+    async def run_one(i: Intent):
+        eligible = select_providers_for_intent(i)
+        tasks = [fetch_proposal(p, i) for p in eligible]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        proposals = [r for r in results if r is not None and not isinstance(r, Exception)]
+        filtered = filter_and_sort_proposals(proposals, i)
+        winner = filtered[0] if filtered else None
+        return {
+            "intent": i.model_dump(),
+            "proposals": filtered,
+            "winner": winner.get("_agent") if winner else None,
+            "winner_name": winner.get("_agent_name") if winner else None,
+        }
+    jobs = await asyncio.gather(*[run_one(i) for i in req.intents])
+    return {"jobs": jobs}
+
 
 @app.get("/agents")
 async def get_agents():
@@ -564,3 +604,35 @@ def build_explanation(proposal_data: Dict[str, Any], intent: Intent) -> Dict[str
         }
     except Exception:
         return {}
+@app.post("/orchestrate")
+async def orchestrate(intent: Intent):
+    trace: List[Dict[str, Any]] = []
+    eligible = select_providers_for_intent(intent)
+    trace.append({"event": "select_providers", "count": len(eligible)})
+    tasks = [fetch_proposal(provider, intent) for provider in eligible]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    proposals = [r for r in results if r is not None and not isinstance(r, Exception)]
+    trace.append({"event": "proposals_received", "count": len(proposals)})
+    filtered = filter_and_sort_proposals(proposals, intent)
+    trace.append({"event": "filtered_sorted", "count": len(filtered)})
+    if not filtered:
+        heavy = [p for p in PROVIDERS if p.get("id") in {"chatgpt", "gemini"}]
+        if heavy:
+            trace.append({"event": "escalate_heavy", "count": len(heavy)})
+            tasks2 = [fetch_proposal(provider, intent) for provider in heavy]
+            results2 = await asyncio.gather(*tasks2, return_exceptions=True)
+            proposals2 = [r for r in results2 if r is not None and not isinstance(r, Exception)]
+            filtered = filter_and_sort_proposals(proposals2, intent)
+            trace.append({"event": "filtered_sorted_after_escalation", "count": len(filtered)})
+    with_explanations = [{**prop, "explanation": build_explanation(prop, intent)} for prop in filtered]
+    winner = with_explanations[0] if with_explanations else None
+    if winner:
+        trace.append({"event": "winner_selected", "agent": winner.get("_agent"), "name": winner.get("_agent_name")})
+    result = {"proposals": with_explanations, "trace": trace, "winner": winner.get("_agent") if winner else None, "winner_name": winner.get("_agent_name") if winner else None}
+    global LAST_TRACE
+    LAST_TRACE = {"timestamp": int(time.time()*1000), "data": result}
+    return result
+
+@app.get("/orchestrate/trace")
+async def orchestrate_trace():
+    return LAST_TRACE or {}

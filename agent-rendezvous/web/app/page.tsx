@@ -70,6 +70,7 @@ export default function Home() {
   const [loadingType, setLoadingType] = useState<'intent' | 'execute' | null>(null);
   const [urlInput, setUrlInput] = useState('');
   const [jsonInput, setJsonInput] = useState('{}');
+  const [useOrchestrator, setUseOrchestrator] = useState(false);
 
   // Add state for new agent registration
   const [newAgent, setNewAgent] = useState({ name: '', url: '' });
@@ -134,7 +135,8 @@ export default function Home() {
     });
 
     try {
-      const response = await fetch(`${hubUrl}/post_intent`, {
+      const endpoint = useOrchestrator ? `${hubUrl}/orchestrate` : `${hubUrl}/post_intent`;
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(intent),
@@ -494,6 +496,17 @@ export default function Home() {
                             }
                             className="bg-muted/30 border-none"
                           />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">Use Orchestrator</Label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={useOrchestrator}
+                              onChange={(e) => setUseOrchestrator(e.target.checked)}
+                            />
+                            <span className="text-xs text-muted-foreground">Route intent to orchestrator</span>
+                          </div>
                         </div>
                       </div>
                     </div>

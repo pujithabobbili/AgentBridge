@@ -17,6 +17,8 @@ interface Proposal {
   permissions?: any;
   sandboxId?: string;
   explanation?: any;
+  _goal_mismatch?: boolean;
+  _telemetry?: { rtt_ms?: number };
 }
 
 interface LiveProposalStreamProps {
@@ -80,6 +82,9 @@ export function LiveProposalStream({ proposals, isLoading }: LiveProposalStreamP
                                   <ChampionIcon className="h-3 w-3" /> Winner
                                </Badge>
                             )}
+                            {prop._goal_mismatch && (
+                              <Badge variant="warning" className="h-4 px-1 text-[10px]">Goal mismatch</Badge>
+                            )}
                          </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                          <span>{prop.plan.length} steps</span>
@@ -124,6 +129,9 @@ export function LiveProposalStream({ proposals, isLoading }: LiveProposalStreamP
                             <Clock01Icon className="h-3 w-3" /> Latency
                          </div>
                          <span className="font-mono text-sm">{prop.est_latency_ms}ms</span>
+                         {prop._telemetry?.rtt_ms != null && (
+                           <Badge variant="outline" className="mt-1 h-4 px-1 text-[10px]">RTT {prop._telemetry.rtt_ms}ms</Badge>
+                         )}
                       </div>
 
                       <div className="flex flex-col items-end pl-2 border-l border-white/5">
